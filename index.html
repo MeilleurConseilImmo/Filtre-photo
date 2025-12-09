@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="fr" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Filtre Photo Agence</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    .drop-zone {
+      transition: all 0.3s ease;
+    }
+    
+    .drop-zone.drag-over {
+      transform: scale(1.02);
+      box-shadow: 0 0 30px rgba(79, 70, 229, 0.3);
+    }
+    
+    .photo-item {
+      transition: transform 0.2s ease;
+    }
+    
+    .photo-item:hover {
+      transform: translateY(-4px);
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full"></div>
+  <script>
+    const defaultConfig = {
+      background_color: "#f8f9fa",
+      surface_color: "#ffffff",
+      text_color: "#1f2937",
+      primary_action_color: "#4f46e5",
+      secondary_action_color: "#6b7280",
+      font_family: "Inter",
+      font_size: 16,
+      app_title: "Filtre Photo Agence",
+      upload_instruction: "Glissez vos photos ici ou cliquez pour sélectionner",
+      download_button_text: "Télécharger",
+      download_all_button_text: "Télécharger toutes les photos"
+    };
+
+    let processedImages = [];
+
+    function createAppStructure() {
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <div class="app-container h-full w-full overflow-auto" style="background-color: ${defaultConfig.background_color};">
+          <div class="max-w-6xl mx-auto p-8">
+            <header class="mb-8 text-center">
+              <h1 id="app-title" class="font-bold mb-2" style="font-family: ${defaultConfig.font_family}, Arial, sans-serif; font-size: ${defaultConfig.font_size * 2}px; color: ${defaultConfig.text_color};">
+                ${defaultConfig.app_title}
+              </h1>
+            </header>
+
+            <div id="drop-zone" class="drop-zone mb-8 p-12 border-4 border-dashed rounded-2xl text-center cursor-pointer" style="background-color: ${defaultConfig.surface_color}; border-color: ${defaultConfig.primary_action_color};">
+              <input type="file" id="file-input" multiple accept="image/*" class="hidden" />
+              <div class="flex flex-col items-center gap-4">
+                <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: ${defaultConfig.primary_action_color};">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                <p id="upload-instruction" style="font-family: ${defaultConfig.font_family}, Arial, sans-serif; font-size: ${defaultConfig.font_size * 1.125}px; color: ${defaultConfig.text_color};">
+                  ${defaultConfig.upload_instruction}
+                </p>
+              </div>
+            </div>
+
+            <div id="download-all-container" class="mb-8 text-center hidden">
+              <button id="download-all-btn" class="px-8 py-4 rounded-xl font-semibold transition-all" style="background-color: ${defaultConfig.primary_action_color}; color: white; font-family: ${defaultConfig.font_family}, Arial, sans-serif; font-size: ${defaultConfig.font_size}px;">
+                ${defaultConfig.download_all_button_text}
+              </button>
+            </div>
+
+            <div id="photos-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+          </div>
+        </div>
+      `;
+
+      setupEventListeners();
+    }
+
+    function setupEventListeners() {
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+      const downloadAllBtn = document.getElementById('download-all-btn');
+
+      dropZone.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', handleFiles);
+
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+      });
+
+      dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        handleFiles({ target: { files: e.dataTransfer.files } });
+      });
+
+      downloadAllBtn.addEventListener('click', downloadAllImages);
+    }
+
+    async function handleFiles(event) {
+      const files = Array.from(event.target.files);
+      const imageFiles = files.filter(file => file.type.startsWith('image/'));
+
+      for (const file of imageFiles) {
+        await processImage(file);
+      }
+
+      updateDownloadAllButton();
+    }
+
+    async function processImage(file) {
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        const img = new Image();
+        img.onload = async () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          canvas.width = img.width;
+          canvas.height = img.height;
+          
+          ctx.drawImage(img, 0, 0);
+          
+          ctx.fillStyle = 'rgba(79, 70, 229, 0.3)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          const processedDataUrl = canvas.toDataURL('image/png');
+          const processedImageData = {
+            id: Date.now() + Math.random(),
+            originalName: file.name,
+            dataUrl: processedDataUrl
+          };
+          
+          processedImages.push(processedImageData);
+          addPhotoToGrid(processedImageData);
+        };
+        img.src = e.target.result;
+      };
+      
+      reader.readAsDataURL(file);
+    }
+
+    function addPhotoToGrid(imageData) {
+      const grid = document.getElementById('photos-grid');
+      const config = window.elementSdk?.config || defaultConfig;
+      
+      const photoCard = document.createElement('div');
+      photoCard.className = 'photo-item rounded-xl overflow-hidden shadow-lg';
+      photoCard.style.backgroundColor = config.surface_color || defaultConfig.surface_color;
+      photoCard.dataset.imageId = imageData.id;
+      
+      photoCard.innerHTML = `
+        <img src="${imageData.dataUrl}" alt="Photo traitée" class="w-full h-64 object-cover" />
+        <div class="p-4">
+          <p class="text-sm mb-3 truncate" style="font-family: ${config.font_family || defaultConfig.font_family}, Arial, sans-serif; font-size: ${(config.font_size || defaultConfig.font_size) * 0.875}px; color: ${config.text_color || defaultConfig.text_color};">
+            ${imageData.originalName}
+          </p>
+          <button class="download-btn w-full py-2 px-4 rounded-lg font-semibold transition-all" style="background-color: ${config.primary_action_color || defaultConfig.primary_action_color}; color: white; font-family: ${config.font_family || defaultConfig.font_family}, Arial, sans-serif; font-size: ${(config.font_size || defaultConfig.font_size) * 0.875}px;">
+            ${config.download_button_text || defaultConfig.download_button_text}
+          </button>
+        </div>
+      `;
+      
+      const downloadBtn = photoCard.querySelector('.download-btn');
+      downloadBtn.addEventListener('click', () => downloadImage(imageData));
+      
+      grid.appendChild(photoCard);
+    }
+
+    function downloadImage(imageData) {
+      const link = document.createElement('a');
+      link.href = imageData.dataUrl;
+      link.download = `filtre_${imageData.originalName}`;
+      link.click();
+    }
+
+    function downloadAllImages() {
+      processedImages.forEach(imageData => {
+        setTimeout(() => downloadImage(imageData), 100);
+      });
+    }
+
+    function updateDownloadAllButton() {
+      const container = document.getElementById('download-all-container');
+      if (processedImages.length > 0) {
+        container.classList.remove('hidden');
+      } else {
+        container.classList.add('hidden');
+      }
+    }
+
+    async function onConfigChange(config) {
+      const appContainer = document.querySelector('.app-container');
+      if (appContainer) {
+        appContainer.style.backgroundColor = config.background_color || defaultConfig.background_color;
+      }
+
+      const appTitle = document.getElementById('app-title');
+      if (appTitle) {
+        appTitle.textContent = config.app_title || defaultConfig.app_title;
+        appTitle.style.fontFamily = `${config.font_family || defaultConfig.font_family}, Arial, sans-serif`;
+        appTitle.style.fontSize = `${(config.font_size || defaultConfig.font_size) * 2}px`;
+        appTitle.style.color = config.text_color || defaultConfig.text_color;
+      }
+
+      const uploadInstruction = document.getElementById('upload-instruction');
+      if (uploadInstruction) {
+        uploadInstruction.textContent = config.upload_instruction || defaultConfig.upload_instruction;
+        uploadInstruction.style.fontFamily = `${config.font_family || defaultConfig.font_family}, Arial, sans-serif`;
+        uploadInstruction.style.fontSize = `${(config.font_size || defaultConfig.font_size) * 1.125}px`;
+        uploadInstruction.style.color = config.text_color || defaultConfig.text_color;
+      }
+
+      const dropZone = document.getElementById('drop-zone');
+      if (dropZone) {
+        dropZone.style.backgroundColor = config.surface_color || defaultConfig.surface_color;
+        dropZone.style.borderColor = config.primary_action_color || defaultConfig.primary_action_color;
+      }
+
+      const svgIcon = dropZone?.querySelector('svg');
+      if (svgIcon) {
+        svgIcon.style.color = config.primary_action_color || defaultConfig.primary_action_color;
+      }
+
+      const downloadAllBtn = document.getElementById('download-all-btn');
+      if (downloadAllBtn) {
+        downloadAllBtn.textContent = config.download_all_button_text || defaultConfig.download_all_button_text;
+        downloadAllBtn.style.backgroundColor = config.primary_action_color || defaultConfig.primary_action_color;
+        downloadAllBtn.style.fontFamily = `${config.font_family || defaultConfig.font_family}, Arial, sans-serif`;
+        downloadAllBtn.style.fontSize = `${config.font_size || defaultConfig.font_size}px`;
+      }
+
+      const photoCards = document.querySelectorAll('.photo-item');
+      photoCards.forEach(card => {
+        card.style.backgroundColor = config.surface_color || defaultConfig.surface_color;
+        
+        const fileName = card.querySelector('p');
+        if (fileName) {
+          fileName.style.fontFamily = `${config.font_family || defaultConfig.font_family}, Arial, sans-serif`;
+          fileName.style.fontSize = `${(config.font_size || defaultConfig.font_size) * 0.875}px`;
+          fileName.style.color = config.text_color || defaultConfig.text_color;
+        }
+        
+        const downloadBtn = card.querySelector('.download-btn');
+        if (downloadBtn) {
+          downloadBtn.textContent = config.download_button_text || defaultConfig.download_button_text;
+          downloadBtn.style.backgroundColor = config.primary_action_color || defaultConfig.primary_action_color;
+          downloadBtn.style.fontFamily = `${config.font_family || defaultConfig.font_family}, Arial, sans-serif`;
+          downloadBtn.style.fontSize = `${(config.font_size || defaultConfig.font_size) * 0.875}px`;
+        }
+      });
+    }
+
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange,
+        mapToCapabilities: (config) => ({
+          recolorables: [
+            {
+              get: () => config.background_color || defaultConfig.background_color,
+              set: (value) => {
+                config.background_color = value;
+                window.elementSdk.setConfig({ background_color: value });
+              }
+            },
+            {
+              get: () => config.surface_color || defaultConfig.surface_color,
+              set: (value) => {
+                config.surface_color = value;
+                window.elementSdk.setConfig({ surface_color: value });
+              }
+            },
+            {
+              get: () => config.text_color || defaultConfig.text_color,
+              set: (value) => {
+                config.text_color = value;
+                window.elementSdk.setConfig({ text_color: value });
+              }
+            },
+            {
+              get: () => config.primary_action_color || defaultConfig.primary_action_color,
+              set: (value) => {
+                config.primary_action_color = value;
+                window.elementSdk.setConfig({ primary_action_color: value });
+              }
+            }
+          ],
+          borderables: [],
+          fontEditable: {
+            get: () => config.font_family || defaultConfig.font_family,
+            set: (value) => {
+              config.font_family = value;
+              window.elementSdk.setConfig({ font_family: value });
+            }
+          },
+          fontSizeable: {
+            get: () => config.font_size || defaultConfig.font_size,
+            set: (value) => {
+              config.font_size = value;
+              window.elementSdk.setConfig({ font_size: value });
+            }
+          }
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ["app_title", config.app_title || defaultConfig.app_title],
+          ["upload_instruction", config.upload_instruction || defaultConfig.upload_instruction],
+          ["download_button_text", config.download_button_text || defaultConfig.download_button_text],
+          ["download_all_button_text", config.download_all_button_text || defaultConfig.download_all_button_text]
+        ])
+      });
+    }
+
+    createAppStructure();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9ab5825ae3176f0a',t:'MTc2NTI5Mzg2NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
