@@ -49,14 +49,32 @@
     };
 
     let processedImages = [];
+    let overlayImage = null;
+    const LOGO_URL = 'https://raw.githubusercontent.com/MeilleurConseilImmo/Filtre-photo/main/logo-impression.png';
+
+    function loadOverlayLogo() {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        overlayImage = img;
+      };
+      img.onerror = () => {
+        console.error('Impossible de charger le logo');
+      };
+      img.src = LOGO_URL;
+    }
 
     function createAppStructure() {
       const app = document.getElementById('app');
       app.innerHTML = `
         <div class="app-container h-full w-full overflow-auto" style="background-color: ${defaultConfig.background_color};">
           <div class="max-w-6xl mx-auto p-8">
-            <header class="mb-8 text-center">
-              <h1 id="app-title" class="font-bold mb-2" style="font-family: ${defaultConfig.font_family}, Arial, sans-serif; font-size: ${defaultConfig.font_size * 2}px; color: ${defaultConfig.text_color};">
+            <header class="mb-8">
+              <div class="flex items-center justify-between mb-4">
+                <img src="${LOGO_URL}" alt="Logo" style="height: 120px; width: auto; object-fit: contain;" crossorigin="anonymous" />
+                <div class="flex-1"></div>
+              </div>
+              <h1 id="app-title" class="font-bold mb-2 text-center" style="font-family: ${defaultConfig.font_family}, Arial, sans-serif; font-size: ${defaultConfig.font_size * 2}px; color: ${defaultConfig.text_color};">
                 ${defaultConfig.app_title}
               </h1>
             </header>
@@ -138,8 +156,35 @@
           
           ctx.drawImage(img, 0, 0);
           
-          ctx.fillStyle = 'rgba(79, 70, 229, 0.3)';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          if (overlayImage) {
+            ctx.globalAlpha = 0.3;
+            
+            // Calculer les proportions pour centrer le logo sans l'étirer
+            const logoRatio = overlayImage.width / overlayImage.height;
+            const canvasRatio = canvas.width / canvas.height;
+            
+            let drawWidth, drawHeight, drawX, drawY;
+            
+            if (logoRatio > canvasRatio) {
+              // Logo plus large proportionnellement
+              drawWidth = canvas.width;
+              drawHeight = canvas.width / logoRatio;
+              drawX = 0;
+              drawY = (canvas.height - drawHeight) / 2;
+            } else {
+              // Logo plus haut proportionnellement
+              drawHeight = canvas.height;
+              drawWidth = canvas.height * logoRatio;
+              drawX = (canvas.width - drawWidth) / 2;
+              drawY = 0;
+            }
+            
+            ctx.drawImage(overlayImage, drawX, drawY, drawWidth, drawHeight);
+            ctx.globalAlpha = 1.0;
+          } else {
+            ctx.fillStyle = 'rgba(79, 70, 229, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
           
           const processedDataUrl = canvas.toDataURL('image/png');
           const processedImageData = {
@@ -185,15 +230,77 @@
     }
 
     function downloadImage(imageData) {
-      const link = document.createElement('a');
-      link.href = imageData.dataUrl;
-      link.download = `filtre_${imageData.originalName}`;
-      link.click();
+      try {
+        // Ouvrir dans un nouvel onglet pour contourner les restrictions iframe
+        const newWindow = window.open();
+        if (newWindow) {
+          newWindow.document.write(`
+            <html>
+              <head>
+                <title>Téléchargement - ${imageData.originalName}</title>
+                <style>
+                  body {
+                    margin: 0;
+                    padding: 20px;
+                    font-family: Arial, sans-serif;
+                    background: #f5f5f5;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                  }
+                  img {
+                    max-width: 90%;
+                    max-height: 70vh;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    border-radius: 8px;
+                  }
+                  .controls {
+                    margin-top: 20px;
+                    display: flex;
+                    gap: 10px;
+                  }
+                  button, a {
+                    padding: 12px 24px;
+                    background: #4f46e5;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    text-decoration: none;
+                    font-size: 16px;
+                    font-weight: 600;
+                  }
+                  button:hover, a:hover {
+                    background: #4338ca;
+                  }
+                  p {
+                    margin-top: 10px;
+                    color: #666;
+                  }
+                </style>
+              </head>
+              <body>
+                <img src="${imageData.dataUrl}" alt="${imageData.originalName}" />
+                <div class="controls">
+                  <a href="${imageData.dataUrl}" download="filtre_${imageData.originalName}">Télécharger</a>
+                  <button onclick="window.close()">Fermer</button>
+                </div>
+                <p>Clic droit sur l'image > "Enregistrer l'image sous..." pour télécharger</p>
+              </body>
+            </html>
+          `);
+          newWindow.document.close();
+        }
+      } catch (error) {
+        console.error('Erreur lors du téléchargement:', error);
+      }
     }
 
     function downloadAllImages() {
-      processedImages.forEach(imageData => {
-        setTimeout(() => downloadImage(imageData), 100);
+      processedImages.forEach((imageData, index) => {
+        setTimeout(() => downloadImage(imageData), index * 200);
       });
     }
 
@@ -328,7 +435,8 @@
       });
     }
 
+    loadOverlayLogo();
     createAppStructure();
   </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9ab5825ae3176f0a',t:'MTc2NTI5Mzg2NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9ab5962df43b9e85',t:'MTc2NTI5NDY3Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
